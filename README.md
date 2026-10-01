@@ -107,6 +107,38 @@ src/
 
 ## 更新日志
 
+### v0.1.3
+
+**修复：真发送卡在输入框，30 秒超时后失败。**
+
+抖音私信输入框**已经从 Draft.js 换成了自研的 editor-kit**，参考项目里那两个 Draft.js 选择器
+实测 `count=0` 早已失效：
+
+| 选择器 | 实测 |
+|---|---|
+| `[data-e2e="msg-input"] .public-DraftEditor-content` | count=0 ❌ |
+| `.DraftEditor-root [contenteditable="true"]` | count=0 ❌ |
+| `[data-e2e="msg-input"] [contenteditable="true"]` | count=1 ✅ |
+
+当前真实结构：`div.editor-kit-container.messageEditorinputArea[contenteditable=true]`，
+父节点 `.messageEditorimChatEditorContainer`、祖父 `.messageMsgInputinputRow`。
+现已把可用选择器提到最前，并合并成 `EDITOR_SELECTOR`，供查找/点击/清空/判空统一使用。
+
+**修复：零宽空格导致「输入框已清空」永远判定失败。**
+
+该编辑器在空的时候仍会留一个零宽空格 U+200B，而 JS 的 `String.trim()` **不把 U+200B 当空白**
+（实测 `trim().length === 1`）。旧的判空逻辑因此永远返回"非空"，会让每一次成功的发送都被
+误判成失败。现已显式剥离 `U+200B/U+200C/U+200D/U+FEFF` 后再判断。
+
+**修复：试运行被误记入发送历史。** 试运行不再写入历史、也不更新好友的最后发送状态，
+避免把「试运行通过」当成「今天已续火」，污染统计和补发顺序。
+
+**新增：发送按钮兜底。** 按 Enter 后若输入框未清空，会尝试点击输入区最右侧的发送图标再确认一次。
+
+**其它：** 参考项目的 `.messageMsgInputpublishBtn` 类名实测也已不存在，故不再依赖它。
+
+## 更新日志（v0.1.2）
+
 ### v0.1.2
 
 **修复：会话切换与列表滚动完全无效（静默失效）。** 表现为点「试运行」后界面一直停在

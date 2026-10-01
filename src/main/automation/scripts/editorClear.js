@@ -1,6 +1,6 @@
 (() => {
-  const ed = document.querySelector('[data-e2e="msg-input"] .public-DraftEditor-content')
-          || document.querySelector('.DraftEditor-root [contenteditable="true"]')
+  const ed = document.querySelector('[data-e2e="msg-input"] [contenteditable="true"]')
+          || document.querySelector('.messageEditorinputArea')
           || document.querySelector('[contenteditable="true"]');
   if (!ed) return false;
   ed.focus();

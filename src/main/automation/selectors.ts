@@ -30,13 +30,24 @@ export const SEL = {
   qrcode: '#animate_qrcode_container'
 }
 
+// 输入框候选选择器。
+//
+// ⚠️ 实测（2026-10）：抖音私信输入框已从 Draft.js 换成 editor-kit，
+//    前两个 Draft.js 选择器 count=0，只是为兼容旧版保留在末尾。
+//    当前真实结构：
+//      div.editor-kit-container.messageEditorinputArea[contenteditable=true]
+//        └ 父 .messageEditorimChatEditorContainer / 祖父 .messageMsgInputinputRow
 export const EDITOR_CANDIDATES = [
-  '[data-e2e="msg-input"] .public-DraftEditor-content',
-  '.DraftEditor-root [contenteditable="true"]',
-  '.messageMsgInput [contenteditable="true"]',
   '[data-e2e="msg-input"] [contenteditable="true"]',
-  '[contenteditable="true"]'
+  '[data-e2e="msg-input"] .messageEditorinputArea',
+  '.messageMsgInput [contenteditable="true"]',
+  '[contenteditable="true"]',
+  '[data-e2e="msg-input"] .public-DraftEditor-content',
+  '.DraftEditor-root [contenteditable="true"]'
 ]
+
+/** 合并成一个选择器：.first() 取 DOM 顺序里第一个命中的元素，避免各调用点各猜一个。 */
+export const EDITOR_SELECTOR = EDITOR_CANDIDATES.join(', ')
 
 export const RATE_LIMIT_KEYWORDS = [
   '操作频繁', '操作太频繁', '发送过于频繁', '请稍后再试', '稍后再试',

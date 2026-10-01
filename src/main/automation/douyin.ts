@@ -3,7 +3,7 @@ import fs from 'node:fs'
 import path from 'node:path'
 import { chromium, type BrowserContext, type Page } from 'playwright-core'
 import {
-  CHAT_URL, SEL, EDITOR_CANDIDATES, RATE_LIMIT_KEYWORDS, LOGIN_TEXTS,
+  CHAT_URL, SEL, EDITOR_SELECTOR, RATE_LIMIT_KEYWORDS, LOGIN_TEXTS,
   JS_LOGIN_DOM, JS_LIST_READY, JS_COLLECT, JS_SCROLL_PROBE, JS_SCROLL_TO,
   JS_CLICK_BY_NAME, JS_CURRENT_CONV, JS_EDITOR_EMPTY, JS_EDITOR_CLEAR,
   JS_MSG_STATE, JS_SCREEN_TEXT
@@ -409,23 +409,53 @@ export class DouyinEngine {
   }
 
   private async findEditor(page: Page): Promise<boolean> {
-    for (const sel of EDITOR_CANDIDATES) {
-      try {
-        const loc = page.locator(sel).first()
-        const n = await withTimeout(loc.count(), 8000, '查找输入框')
-        if (n > 0 && (await withTimeout(loc.isVisible(), 8000, '判断输入框可见'))) return true
-      } catch (e) {
-        continue
-      }
+    try {
+      const loc = page.locator(EDITOR_SELECTOR).first()
+      const n = await withTimeout(loc.count(), 8000, '查找输入框')
+      if (n > 0 && (await withTimeout(loc.isVisible(), 8000, '判断输入框可见'))) return true
+    } catch (e) {
+      void e
     }
     return false
   }
 
+  /**
+   * 兜底发送：按输入区里最右侧的可点击元素（即发送图标）。
+   * 仅在 Enter 没把消息发出去时调用。
+   */
+  private async clickSendButton(page: Page): Promise<boolean> {
+    try {
+      const hit = (await withTimeout(
+        page.evaluate(
+          '(() => {' +
+            '  const root = document.querySelector(\'.messageMsgInputcontainer\') || document.querySelector(\'[data-e2e="msg-input"]\');' +
+            '  if (!root) return null;' +
+            '  const els = [...root.querySelectorAll(\'*\')].filter((el) => {' +
+            '    const r = el.getBoundingClientRect();' +
+            '    return r.width > 0 && r.height > 0 && (el.tagName === \'BUTTON\' || getComputedStyle(el).cursor === \'pointer\');' +
+            '  });' +
+            '  if (!els.length) return null;' +
+            '  const last = els[els.length - 1];' +
+            '  const r = last.getBoundingClientRect();' +
+            '  return { x: r.left + r.width / 2, y: r.top + r.height / 2 };' +
+            '})()'
+        ),
+        10000,
+        '查找发送按钮'
+      )) as { x: number; y: number } | null
+      if (!hit) return false
+      await withTimeout(page.mouse.click(hit.x, hit.y), 10000, '点击发送按钮')
+      return true
+    } catch (e) {
+      logbus.warn('点击发送按钮失败：' + String(e).slice(0, 100))
+      return false
+    }
+  }
+
   private async typeMessage(page: Page, text: string): Promise<boolean> {
     try {
-      const loc = page.locator(EDITOR_CANDIDATES[0]).first()
-      const target = (await loc.count()) > 0 ? loc : page.locator(EDITOR_CANDIDATES[1]).first()
-      await target.click()
+      const target = page.locator(EDITOR_SELECTOR).first()
+      await withTimeout(target.click({ timeout: 15000 }), 20000, '点击输入框')
       await page.waitForTimeout(300)
       await this.clearEditor(page)
       await page.waitForTimeout(200)
@@ -436,7 +466,7 @@ export class DouyinEngine {
         logbus.warn('文字未进入输入框')
         return false
       }
-      await page.keyboard.press('Enter')
+      await withTimeout(page.keyboard.press('Enter'), 10000, '按 Enter 发送')
       return true
     } catch (e) {
       logbus.warn('输入异常：' + String(e).slice(0, 120))
@@ -511,7 +541,12 @@ export class DouyinEngine {
     }
     if (await this.waitCleared(page, 9000)) return { ok: true, error: null }
 
-    logbus.warn('未检测到消息发出，重试一次：' + name)
+    logbus.warn('按 Enter 后输入框未清空，尝试点击发送按钮：' + name)
+    if (await this.clickSendButton(page)) {
+      if (await this.waitCleared(page, 8000)) return { ok: true, error: null }
+    }
+
+    logbus.warn('仍未确认发出，完整重试一次：' + name)
     if (!(await this.typeMessage(page, message))) {
       return { ok: false, error: '重试时文字未能输入' }
     }

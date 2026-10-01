@@ -116,10 +116,14 @@ async function runAll(reason: string, opts: { dryRun?: boolean } = {}): Promise<
         res = { ok: false, error: String(e).slice(0, 160) }
         logbus.error('处理「' + friend.name + '」超时或异常，跳过继续：' + String(e).slice(0, 120))
       }
-      const at = new Date().toISOString()
-      const rec: SendRecord = { at, name: friend.name, ok: res.ok, message, error: res.error }
-      store.addHistory(rec)
-      store.patchFriend(friend.id, { lastSentAt: at, lastOk: res.ok, lastError: res.error })
+      // 试运行不写入历史、也不改好友的最后发送状态，
+      // 否则会把「试运行通过」误记成「今天已续火」，污染统计与补发顺序。
+      if (!dryRun) {
+        const at = new Date().toISOString()
+        const rec: SendRecord = { at, name: friend.name, ok: res.ok, message, error: res.error }
+        store.addHistory(rec)
+        store.patchFriend(friend.id, { lastSentAt: at, lastOk: res.ok, lastError: res.error })
+      }
       if (res.ok) {
         ok++
         logbus.info('✅ ' + friend.name + ' ← ' + message)
