@@ -27,6 +27,7 @@
     "electron": "^33.2.1",
     "electron-builder": "^25.1.8",
     "electron-vite": "^2.3.0",
+    "rcedit": "^5.0.1",
     "react": "^18.3.1",
     "react-dom": "^18.3.1",
     "typescript": "^5.7.2",
@@ -61,7 +62,8 @@
       "allowToChangeInstallationDirectory": true,
       "createDesktopShortcut": true,
       "shortcutName": "抖音续火花助手"
-    }
+    },
+    "afterPack": "scripts/after-pack.js"
   },
   "repository": {
     "type": "git",
