@@ -323,7 +323,8 @@ function createWindow(): void {
     show: false,
     autoHideMenuBar: true,
     title: '抖音续火花助手',
-    backgroundColor: '#0f1115',
+    backgroundColor: '#0b0d12',
+    icon: path.join(__dirname, '../../resources/icon.ico'),
     webPreferences: {
       preload: path.join(__dirname, '../preload/index.js'),
       sandbox: false,
