@@ -144,10 +144,35 @@ export class DouyinEngine {
     }
   }
 
+  /**
+   * 等聊天界面真正渲染出来。
+   *
+   * 冷启动时 gotoChat 返回后页面往往还在加载，此时 checkLogin 会因为既没有
+   * 聊天根节点也没有头像而判成「未知」，进而让刷新好友直接失败
+   * （表现为「聊天界面尚未就绪」）。
+   */
+  private async waitForChatReady(page: Page, timeoutMs: number): Promise<boolean> {
+    const t0 = Date.now()
+    while (Date.now() - t0 < timeoutMs) {
+      let dom: Record<string, unknown> = {}
+      try {
+        dom = (await withTimeout(page.evaluate(JS_LOGIN_DOM), 12000, '等待界面就绪')) as Record<string, unknown>
+      } catch (e) {
+        void e
+      }
+      if (dom.hasChatRoot || dom.avatarCard || dom.loginVisible || dom.qrcode) return true
+      await sleep(500)
+    }
+    return false
+  }
+
   async prepare(settings: Settings, forceHeaded = false): Promise<{ page: Page; login: LoginCheck }> {
     const headless = forceHeaded ? false : settings.headless
     const page = await this.ensure(headless, settings.chromePath)
     await this.gotoChat(page)
+    if (!(await this.waitForChatReady(page, 30000))) {
+      logbus.warn('等待聊天界面就绪超时（30 秒），仍继续尝试判定登录态')
+    }
     const login = await this.checkLogin(page)
     return { page, login }
   }

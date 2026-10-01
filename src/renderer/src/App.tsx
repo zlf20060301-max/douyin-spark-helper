@@ -137,6 +137,16 @@ function AnimatedNumber({ value, className, suffix }: { value: number; className
 }
 
 /* ---------------- 工具 ---------------- */
+/** 洗掉 Electron IPC 包装与 Error 前缀，只留下人能看懂的原因。 */
+function cleanErr(e: unknown): string {
+  return String(e)
+    .replace(/^Error:\s*/, '')
+    .replace(/Error invoking remote method '[^']*':\s*/, '')
+    .replace(/^Error:\s*/, '')
+    .trim()
+    .slice(0, 200)
+}
+
 function hueOf(s: string): number {
   let h = 7
   for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360
@@ -226,6 +236,21 @@ export default function App(): JSX.Element {
     if (logRef.current && tab === 'overview') logRef.current.scrollTop = logRef.current.scrollHeight
   }, [state, tab])
 
+  // 液态玻璃的指向性高光：把指针位置写进最近的 .glass 元素的 --mx/--my
+  useEffect(() => {
+    const onMove = (e: PointerEvent): void => {
+      const t = e.target as HTMLElement | null
+      const el = t && t.closest ? (t.closest('.glass') as HTMLElement | null) : null
+      if (!el) return
+      const r = el.getBoundingClientRect()
+      if (!r.width || !r.height) return
+      el.style.setProperty('--mx', ((e.clientX - r.left) / r.width) * 100 + '%')
+      el.style.setProperty('--my', ((e.clientY - r.top) / r.height) * 100 + '%')
+    }
+    window.addEventListener('pointermove', onMove, { passive: true })
+    return () => window.removeEventListener('pointermove', onMove)
+  }, [])
+
   const flash = (msg: string): void => {
     setToast(msg)
     window.setTimeout(() => setToast(null), 3800)
@@ -238,7 +263,7 @@ export default function App(): JSX.Element {
       if (next) setState(next as Snapshot)
       if (okMsg) flash(okMsg)
     } catch (e) {
-      flash('操作失败：' + String(e).replace(/^Error:\s*/, '').slice(0, 200))
+      flash('操作失败：' + cleanErr(e))
     } finally {
       setBusy('')
     }
@@ -254,7 +279,7 @@ export default function App(): JSX.Element {
       if (next) setState(next as Snapshot)
       if (!silent) flash('好友列表已刷新')
     } catch (e) {
-      flash('刷新好友失败：' + String(e).replace(/^Error:\s*/, '').slice(0, 180))
+      flash('刷新好友失败：' + cleanErr(e))
     } finally {
       refreshingRef.current = false
       setRefreshing(false)
@@ -351,7 +376,7 @@ export default function App(): JSX.Element {
       const r = (await api.testAi(draft.ai)) as { text: string }
       flash('AI 生成成功：' + r.text)
     } catch (e) {
-      flash('AI 测试失败：' + String(e).replace(/^Error:\s*/, '').slice(0, 220))
+      flash('AI 测试失败：' + cleanErr(e))
     } finally {
       setBusy('')
     }
@@ -359,7 +384,13 @@ export default function App(): JSX.Element {
 
   return (
     <div className="app">
-      <aside className="sidebar">
+      <div className="backdrop" aria-hidden="true">
+        <span className="blob b1" />
+        <span className="blob b2" />
+        <span className="blob b3" />
+      </div>
+      <div className="veil" aria-hidden="true" />
+      <aside className="sidebar glass">
         <div className="brand">
           <div className="brand-mark">🔥</div>
           <div className="brand-text">
@@ -388,7 +419,7 @@ export default function App(): JSX.Element {
       </aside>
 
       <div className="main">
-        <header className="topbar">
+        <header className="topbar glass">
           <div className="page-title">{(TABS.find((t) => t.id === tab) || TABS[0]).label}</div>
           {running ? (
             <span className="badge warn"><span className="spin" />执行中</span>
@@ -407,27 +438,27 @@ export default function App(): JSX.Element {
           {tab === 'overview' ? (
             <div className="overview">
               <div className="grid">
-                <div className="stat ok">
+                <div className="stat glass ok">
                   <div className="head"><Icon name="check" size={15} />今日成功</div>
                   <AnimatedNumber value={stats.okToday} className="num ok" />
                   <div className="sub">失败 {stats.failToday} 人</div>
                 </div>
-                <div className="stat">
+                <div className="stat glass">
                   <div className="head"><Icon name="overview" size={15} />今日成功率</div>
                   <AnimatedNumber value={stats.rate} className="num" suffix="%" />
                   <div className="progress" style={{ marginTop: 8 }}><i style={{ width: stats.rate + '%' }} /></div>
                 </div>
-                <div className="stat">
+                <div className="stat glass">
                   <div className="head"><Icon name="users" size={15} />已勾选好友</div>
                   <AnimatedNumber value={stats.selected} className="num" />
                   <div className="sub">好友总数 {friends.filter((f) => !f.isGroup).length}</div>
                 </div>
-                <div className="stat flame">
+                <div className="stat glass flame">
                   <div className="head"><Icon name="flame" size={15} />有火花的好友</div>
                   <AnimatedNumber value={stats.streakCount} className="num flame" />
                   <div className="sub">按火花天数自动识别</div>
                 </div>
-                <div className="stat">
+                <div className="stat glass">
                   <div className="head"><Icon name="clock" size={15} />上次执行</div>
                   <div className="num" style={{ fontSize: 15, fontWeight: 600 }}>{fmt(state.status.lastRunAt)}</div>
                   <div className="sub">{state.status.lastSummary || '尚未执行'}</div>
@@ -435,7 +466,7 @@ export default function App(): JSX.Element {
               </div>
 
               {!loggedIn ? (
-                <div className="panel" style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
+                <div className="panel glass" style={{ display: 'flex', gap: 14, alignItems: 'flex-start' }}>
                   <span style={{ color: 'var(--warn)', marginTop: 2 }}><Icon name="key" size={18} /></span>
                   <div>
                     <h3 className="section-title" style={{ marginBottom: 6 }}>需要登录</h3>
@@ -446,7 +477,7 @@ export default function App(): JSX.Element {
                 </div>
               ) : null}
 
-              <div className="panel grow">
+              <div className="panel glass grow">
                 <div className="panel-head">
                   <h3>运行日志</h3>
                   <span className="hint">共 {state.logs.length} 条</span>
@@ -489,7 +520,7 @@ export default function App(): JSX.Element {
                 勾选要自动续火花的好友。带 🔥 的数字是当前连续天数；标了「群聊」的只是提示，悬停可看判定依据，「选中有火的」会自动跳过它们。
                 <span className="auto-tag">进入本页会自动刷新一次</span>
               </div>
-              <div className="table-wrap">
+              <div className="table-wrap glass">
                 <div className="table-scroll">
                   <table>
                     <thead>
@@ -563,7 +594,7 @@ export default function App(): JSX.Element {
                 <div className="spacer" />
                 <button className="sm ghost" onClick={() => call('clearHistory', undefined, '记录已清空')}><span className="row" style={{ gap: 6 }}><Icon name="trash" size={14} />清空记录</span></button>
               </div>
-              <div className="table-wrap">
+              <div className="table-wrap glass">
                 <div className="table-scroll">
                   <table>
                     <thead>
@@ -596,7 +627,7 @@ export default function App(): JSX.Element {
 
           {tab === 'settings' ? (
             <div className="form">
-              <div className="panel">
+              <div className="panel glass">
                 <h3 className="section-title"><Icon name="clock" size={15} />定时与节奏</h3>
                 <div className="check">
                   <Switch checked={draft.enabled} onChange={(v) => patchDraft({ enabled: v })} />
@@ -632,7 +663,7 @@ export default function App(): JSX.Element {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel glass">
                 <h3 className="section-title"><Icon name="retry" size={15} />失败补发</h3>
                 <div className="check">
                   <Switch checked={draft.retryEnabled} onChange={(v) => patchDraft({ retryEnabled: v })} />
@@ -644,7 +675,7 @@ export default function App(): JSX.Element {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel glass">
                 <h3 className="section-title"><Icon name="inbox" size={15} />本地文案库</h3>
                 <div className="tpl-meta">
                   <span className="badge dim">共 {draft.templates.length} 条</span>
@@ -662,7 +693,7 @@ export default function App(): JSX.Element {
                 <button className="sm ghost" onClick={addTemplate}>+ 添加一条</button>
               </div>
 
-              <div className="panel">
+              <div className="panel glass">
                 <h3 className="section-title"><Icon name="server" size={15} />AI 自动生成消息</h3>
                 <div className="check">
                   <Switch checked={draft.ai.enabled} onChange={(v) => patchAi({ enabled: v })} />
@@ -697,7 +728,7 @@ export default function App(): JSX.Element {
                 </div>
               </div>
 
-              <div className="panel">
+              <div className="panel glass">
                 <h3 className="section-title"><Icon name="settings" size={15} />高级</h3>
                 <div className="field" style={{ marginBottom: 14 }}>
                   <label>Chrome 可执行文件路径（留空则自动使用系统 Chrome）</label>
