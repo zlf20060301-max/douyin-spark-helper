@@ -6,8 +6,9 @@ import {
   CHAT_URL, SEL, EDITOR_CANDIDATES, RATE_LIMIT_KEYWORDS, LOGIN_TEXTS,
   JS_LOGIN_DOM, JS_LIST_READY, JS_COLLECT, JS_SCROLL_PROBE, JS_SCROLL_TO,
   JS_CLICK_BY_NAME, JS_CURRENT_CONV, JS_EDITOR_EMPTY, JS_EDITOR_CLEAR,
-  JS_MSG_STATE, JS_SCREEN_TEXT, parseStreakDays, isGroupTitle
+  JS_MSG_STATE, JS_SCREEN_TEXT
 } from './selectors'
+import { parseStreakDays, detectGroup } from './detect'
 import { logbus } from '../logbus'
 import type { Friend, Settings } from '../../shared/types'
 
@@ -252,12 +253,17 @@ export class DouyinEngine {
         if (seen.has(id)) continue
         const streakText = (it.streakText as string) || ''
         const participantCount = it.participantCount == null ? null : Number(it.participantCount)
+        const convId = it.convId == null ? null : String(it.convId)
+        const verdict = detectGroup(convId, participantCount)
         seen.set(id, {
           id,
           name,
           streakText,
           streakDays: parseStreakDays(streakText),
-          isGroup: isGroupTitle(name, participantCount),
+          convId,
+          participantCount,
+          isGroup: verdict.isGroup,
+          groupReason: verdict.reason,
           selected: false,
           lastSentAt: null,
           lastOk: null,
@@ -290,7 +296,15 @@ export class DouyinEngine {
     }
 
     const list = [...seen.values()].sort((a, b) => (b.streakDays || 0) - (a.streakDays || 0))
-    logbus.info('已读取会话 ' + list.length + ' 个（含群聊 ' + list.filter((f) => f.isGroup).length + ' 个）')
+    const groups = list.filter((f) => f.isGroup)
+    const withStreak = list.filter((f) => !f.isGroup && f.streakDays)
+    logbus.info(
+      '已读取会话 ' + list.length + ' 个：单聊 ' + (list.length - groups.length) +
+      ' 个（其中有火花的 ' + withStreak.length + ' 个）、群聊 ' + groups.length + ' 个'
+    )
+    if (groups.length) {
+      logbus.info('群聊判定示例：' + groups.slice(0, 3).map((g) => g.name + '（' + g.groupReason + '）').join('；'))
+    }
     return list
   }
 

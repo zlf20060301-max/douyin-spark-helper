@@ -5,7 +5,10 @@ type Friend = {
   name: string
   streakText: string
   streakDays: number | null
+  convId: string | null
+  participantCount: number | null
   isGroup: boolean
+  groupReason: string
   selected: boolean
   lastSentAt: string | null
   lastOk: boolean | null
@@ -308,7 +311,8 @@ export default function App(): JSX.Element {
               </button>
             </div>
             <div className="hint">
-              勾选要自动续火花的好友。带 🔥 的是当前有火花的好友，数字为连续天数；群聊会被自动排除。
+              勾选要自动续火花的好友。带 🔥 的是当前有火花的好友，数字为连续天数。
+              所有好友都可以勾选；标了「群聊」的只是提示，鼠标悬停可看判定依据，「选中有火的」会自动跳过它们。
             </div>
             <div className="scroll">
               <table>
@@ -338,13 +342,17 @@ export default function App(): JSX.Element {
                           <input
                             type="checkbox"
                             checked={f.selected}
-                            disabled={f.isGroup}
+                            title={f.groupReason}
                             onChange={(e) => call('patchFriend', { id: f.id, patch: { selected: e.target.checked } })}
                           />
                         </td>
                         <td>
                           {f.name}
-                          {f.isGroup ? <span className="badge dim" style={{ marginLeft: 8 }}>群聊</span> : null}
+                          {f.isGroup ? (
+                            <span className="badge dim" style={{ marginLeft: 8 }} title={f.groupReason}>
+                              群聊
+                            </span>
+                          ) : null}
                         </td>
                         <td>{f.streakDays ? <span className="streak">🔥 {f.streakDays} 天</span> : f.streakText ? <span className="muted">{f.streakText}</span> : <span className="muted">—</span>}</td>
                         <td className="muted">{fmt(f.lastSentAt)}</td>

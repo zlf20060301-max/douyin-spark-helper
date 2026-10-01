@@ -3,7 +3,10 @@ export interface Friend {
   name: string
   streakText: string
   streakDays: number | null
+  convId: string | null
+  participantCount: number | null
   isGroup: boolean
+  groupReason: string
   selected: boolean
   lastSentAt: string | null
   lastOk: boolean | null

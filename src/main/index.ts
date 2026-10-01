@@ -199,11 +199,7 @@ function registerIpc(): void {
 
   ipcMain.handle('friends:selectAll', (_e, payload: { selected: boolean; onlyWithStreak: boolean }) => {
     for (const f of store.friends) {
-      if (f.isGroup) {
-        f.selected = false
-        continue
-      }
-      if (payload.onlyWithStreak && !f.streakDays) {
+      if (payload.onlyWithStreak && (f.isGroup || !f.streakDays)) {
         f.selected = false
         continue
       }

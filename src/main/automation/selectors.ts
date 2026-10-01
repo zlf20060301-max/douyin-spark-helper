@@ -58,15 +58,5 @@ export const JS_EDITOR_CLEAR = editorClearJs
 export const JS_MSG_STATE = msgStateJs
 export const JS_SCREEN_TEXT = screenTextJs
 
-export function parseStreakDays(text: string | null): number | null {
-  if (!text) return null
-  const m = String(text).match(/(\d+)/)
-  if (!m) return null
-  const n = Number(m[1])
-  return Number.isFinite(n) ? n : null
-}
-
-export function isGroupTitle(name: string, participantCount: number | null): boolean {
-  if (participantCount != null && participantCount > 1) return true
-  return /[（(]\s*\d+\s*[)）]\s*$/.test(name)
-}
+export { parseStreakDays, detectGroup } from './detect'
+export type { GroupVerdict } from './detect'
