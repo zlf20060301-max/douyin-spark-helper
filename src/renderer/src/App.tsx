@@ -136,6 +136,33 @@ function AnimatedNumber({ value, className, suffix }: { value: number; className
   )
 }
 
+/* ---------------- 品牌标记 ---------------- */
+// 与桌面图标同一套火焰轮廓（尖顶 + 左侧内凹），保证图标与界面内标识一致
+const FLAME_D =
+  'M16.9 3.4C18.2 7.8 20.7 13.8 21.5 19.5C22.2 25.2 19.6 28.3 16 28.4C12.4 28.3 9.8 25.2 10.5 19.5C11.2 16 12.5 15.2 13.2 13.4C14.2 10.7 16.1 6.6 16.9 3.4Z'
+
+function FlameMark({ size = 22 }: { size?: number }): JSX.Element {
+  return (
+    <svg width={size} height={size} viewBox="0 0 32 32" aria-hidden="true">
+      <defs>
+        <linearGradient id="dyFlame" x1="0.15" y1="1" x2="0.35" y2="0">
+          <stop offset="0" stopColor="#FFE7A6" />
+          <stop offset="0.42" stopColor="#FFA02C" />
+          <stop offset="1" stopColor="#FF6A08" />
+        </linearGradient>
+      </defs>
+      {/* 侧焰 */}
+      <g transform="translate(15.5,26) scale(0.58) translate(-15.5,-26) translate(-7.5,1.2)" opacity="0.95">
+        <path d={FLAME_D} fill="#F0520A" />
+      </g>
+      {/* 主焰 */}
+      <path d={FLAME_D} fill="url(#dyFlame)" />
+      {/* 内焰芯 */}
+      <ellipse cx="16" cy="23.2" rx="3.3" ry="3.9" fill="#FFF6D8" opacity="0.92" />
+    </svg>
+  )
+}
+
 /* ---------------- 工具 ---------------- */
 /** 洗掉 Electron IPC 包装与 Error 前缀，只留下人能看懂的原因。 */
 function cleanErr(e: unknown): string {
@@ -392,7 +419,9 @@ export default function App(): JSX.Element {
       <div className="veil" aria-hidden="true" />
       <aside className="sidebar glass">
         <div className="brand">
-          <div className="brand-mark">🔥</div>
+          <div className="brand-mark">
+            <FlameMark size={22} />
+          </div>
           <div className="brand-text">
             续火花助手
             <small>DOUYIN SPARK</small>

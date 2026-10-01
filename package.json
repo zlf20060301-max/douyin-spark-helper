@@ -1,6 +1,6 @@
 {
   "name": "douyin-spark-helper",
-  "version": "0.1.7",
+  "version": "0.1.8",
   "description": "抖音续火花桌面助手 — 本地浏览器自动化，保持好友聊天火花不熄灭",
   "main": "./out/main/index.js",
   "author": "A29DJX",
