@@ -293,3 +293,137 @@ kbd {
 .tpl-row { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
 .tpl-row input { flex: 1; }
 .tpl-row button { flex: 0 0 auto; padding: 7px 9px; }
+/* ============================================================
+   精修：更细腻的层次、动效与交互反馈
+   ============================================================ */
+
+/* 面板与卡片的“内高光”，让边缘更有质感 */
+.stat, .panel, .table-wrap {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.045), var(--shadow);
+}
+.stat:hover {
+  transform: translateY(-3px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.07), 0 14px 34px rgba(0,0,0,.34);
+}
+.panel { transition: border-color .25s var(--ease), box-shadow .25s var(--ease); }
+.panel:hover { border-color: #262d3c; }
+
+/* 顶栏底部发丝线，滚动时更有分隔感 */
+.topbar { position: relative; }
+.topbar::after {
+  content: ""; position: absolute; left: 0; right: 0; bottom: -1px; height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(254,44,85,.28), rgba(37,244,238,.14), transparent);
+}
+
+/* 侧栏选中项的左侧强调条 */
+.nav-item { position: relative; }
+.nav-item::before {
+  content: ""; position: absolute; left: 0; top: 50%; width: 3px; height: 0;
+  background: linear-gradient(180deg, #ff3b5c, #ff8a3d); border-radius: 0 3px 3px 0;
+  transform: translateY(-50%); transition: height .24s var(--ease);
+}
+.nav-item.active::before { height: 62%; }
+.nav-item.active { background: linear-gradient(90deg, rgba(254,44,85,.16), rgba(254,44,85,.04)); }
+
+/* 按钮内高光 */
+button { box-shadow: inset 0 1px 0 rgba(255,255,255,.05); }
+button:hover:not(:disabled) { transform: translateY(-1px); }
+button:active:not(:disabled) { transform: translateY(0) scale(.985); }
+
+/* ---------- 开关 ---------- */
+.switch {
+  position: relative; flex: 0 0 44px; width: 44px; height: 25px;
+  border-radius: 999px; padding: 0;
+  background: var(--surface-3); border: 1px solid var(--border);
+  box-shadow: inset 0 1px 3px rgba(0,0,0,.35) !important;
+  transition: background .26s var(--ease), border-color .26s var(--ease);
+}
+.switch .knob {
+  position: absolute; top: 2px; left: 2px; width: 19px; height: 19px; border-radius: 50%;
+  background: #7d869a; box-shadow: 0 1px 3px rgba(0,0,0,.45);
+  transition: transform .28s cubic-bezier(.34,1.4,.64,1), background .26s var(--ease);
+}
+.switch.on { background: linear-gradient(135deg, #ff3b5c, #d80d44); border-color: transparent; }
+.switch.on .knob { transform: translateX(19px); background: #fff; }
+.switch:disabled { opacity: .45; }
+
+/* ---------- 进度条 ---------- */
+.progress { overflow: hidden; }
+.progress.thin { height: 3px; border-radius: 0; margin: -2px 0 0; }
+.progress > i { transition: width .5s var(--ease); }
+.progress > i.indet {
+  width: 34% !important;
+  animation: indet 1.1s cubic-bezier(.65,.05,.36,1) infinite;
+}
+@keyframes indet {
+  0% { transform: translateX(-110%); }
+  100% { transform: translateX(320%); }
+}
+
+/* ---------- 切页与卡片入场 ---------- */
+.tabpane { animation: paneIn .3s var(--ease) both; }
+@keyframes paneIn {
+  from { opacity: 0; transform: translateY(10px) scale(.995); }
+  to { opacity: 1; transform: none; }
+}
+
+.overview .grid > .stat { animation: cardIn .46s var(--ease) both; }
+.overview .grid > .stat:nth-child(1) { animation-delay: .01s; }
+.overview .grid > .stat:nth-child(2) { animation-delay: .06s; }
+.overview .grid > .stat:nth-child(3) { animation-delay: .11s; }
+.overview .grid > .stat:nth-child(4) { animation-delay: .16s; }
+.overview .grid > .stat:nth-child(5) { animation-delay: .21s; }
+@keyframes cardIn {
+  from { opacity: 0; transform: translateY(14px) scale(.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.table-wrap tbody tr { animation: rowIn .28s var(--ease) both; }
+@keyframes rowIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+/* 表格行悬浮时左侧亮条 */
+tbody tr td:first-child { position: relative; }
+tbody tr:hover td { background: rgba(255,255,255,.022); }
+tbody tr:hover td:first-child::before {
+  content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 2px;
+  background: linear-gradient(180deg, var(--accent), var(--flame));
+}
+
+/* ---------- 骨架屏 ---------- */
+.skeleton {
+  height: 13px; border-radius: 7px;
+  background: linear-gradient(90deg, #171b24 25%, #232a38 37%, #171b24 63%);
+  background-size: 400% 100%;
+  animation: shimmer 1.35s ease-in-out infinite;
+}
+@keyframes shimmer { 0% { background-position: 100% 0; } 100% { background-position: -100% 0; } }
+
+/* 自动刷新标记 */
+.auto-tag {
+  display: inline-flex; align-items: center; margin-left: 8px;
+  font-size: 11px; color: #7dd3c0;
+  background: rgba(37,244,238,.09); border: 1px solid rgba(37,244,238,.22);
+  border-radius: 999px; padding: 1px 9px;
+}
+
+/* 日志行淡入 */
+.logs .row { animation: rowIn .22s var(--ease) both; }
+
+/* 更细腻的滚动条 */
+::-webkit-scrollbar-thumb { transition: background .2s; }
+
+/* 尊重系统「减少动态效果」设置 */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: .001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .001ms !important;
+  }
+}
+/* 切页容器撑满内容区，保证内部 min-height:100% 有参照 */
+.tabpane { display: flex; flex-direction: column; min-height: 100%; }
+.tabpane > * { flex: 1 1 auto; min-height: 0; }
+.overview { min-height: 0; }

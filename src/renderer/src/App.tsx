@@ -82,6 +82,60 @@ function Icon({ name, size = 17 }: { name: string; size?: number }): JSX.Element
   )
 }
 
+/* ---------------- 交互组件 ---------------- */
+function Switch({
+  checked,
+  onChange,
+  disabled
+}: {
+  checked: boolean
+  onChange: (v: boolean) => void
+  disabled?: boolean
+}): JSX.Element {
+  return (
+    <button
+      type="button"
+      role="switch"
+      aria-checked={checked}
+      className={'switch' + (checked ? ' on' : '')}
+      disabled={disabled}
+      onClick={() => onChange(!checked)}
+    >
+      <span className="knob" />
+    </button>
+  )
+}
+
+/** 数字缓动：值变化时滚动到新值，而不是直接跳变。 */
+function AnimatedNumber({ value, className, suffix }: { value: number; className?: string; suffix?: string }): JSX.Element {
+  const [shown, setShown] = useState(value)
+  const shownRef = useRef(value)
+  useEffect(() => {
+    const from = shownRef.current
+    const to = value
+    if (from === to) return
+    const t0 = performance.now()
+    const dur = 560
+    let raf = 0
+    const step = (t: number): void => {
+      const p = Math.min(1, (t - t0) / dur)
+      const e = 1 - Math.pow(1 - p, 3)
+      const v = Math.round(from + (to - from) * e)
+      shownRef.current = v
+      setShown(v)
+      if (p < 1) raf = requestAnimationFrame(step)
+    }
+    raf = requestAnimationFrame(step)
+    return () => cancelAnimationFrame(raf)
+  }, [value])
+  return (
+    <div className={className}>
+      {shown}
+      {suffix || ''}
+    </div>
+  )
+}
+
 /* ---------------- 工具 ---------------- */
 function hueOf(s: string): number {
   let h = 7
@@ -144,8 +198,12 @@ export default function App(): JSX.Element {
   const [busy, setBusy] = useState('')
   const [draft, setDraft] = useState<Settings | null>(null)
   const [, setTick] = useState(0)
+  const [refreshing, setRefreshing] = useState(false)
   const dirty = useRef(false)
   const logRef = useRef<HTMLDivElement | null>(null)
+  const refreshingRef = useRef(false)
+  const runningRef = useRef(false)
+  const lastTab = useRef('')
 
   useEffect(() => {
     void api.snapshot().then((s) => setState(s as Snapshot))
@@ -185,6 +243,40 @@ export default function App(): JSX.Element {
       setBusy('')
     }
   }
+
+  /** 拉取好友列表。silent=true 时不弹成功提示（用于进入页面时的自动刷新）。 */
+  const refreshFriends = async (silent: boolean): Promise<void> => {
+    if (refreshingRef.current) return
+    refreshingRef.current = true
+    setRefreshing(true)
+    try {
+      const next = await api.refreshFriends()
+      if (next) setState(next as Snapshot)
+      if (!silent) flash('好友列表已刷新')
+    } catch (e) {
+      flash('刷新好友失败：' + String(e).replace(/^Error:\s*/, '').slice(0, 180))
+    } finally {
+      refreshingRef.current = false
+      setRefreshing(false)
+    }
+  }
+
+  // 每次进入「好友」页自动刷新一次。
+  // 渲染期同步 runningRef，避免把 running 放进依赖里导致重复触发。
+  runningRef.current = state ? state.status.running : false
+  useEffect(() => {
+    if (tab !== 'friends') {
+      lastTab.current = tab
+      return
+    }
+    if (lastTab.current === 'friends') return
+    lastTab.current = 'friends'
+    if (runningRef.current) {
+      flash('正在执行任务，已跳过自动刷新')
+      return
+    }
+    void refreshFriends(true)
+  }, [tab])
 
   const friends = state ? state.friends : []
   const history = state ? state.history : []
@@ -280,7 +372,9 @@ export default function App(): JSX.Element {
             <button key={t.id} className={'nav-item' + (tab === t.id ? ' active' : '')} onClick={() => setTab(t.id)}>
               <Icon name={t.icon} />
               <span>{t.label}</span>
-              {t.id === 'friends' && friends.length > 0 ? <span className="badge-count">{friends.length}</span> : null}
+              {t.id === 'friends' && friends.length > 0 ? (
+                <span className="badge-count">{friends.filter((f) => !f.isGroup).length}</span>
+              ) : null}
               {t.id === 'history' && history.length > 0 ? <span className="badge-count">{history.length}</span> : null}
             </button>
           ))}
@@ -309,27 +403,28 @@ export default function App(): JSX.Element {
         </header>
 
         <main className="content">
+          <div className="tabpane" key={tab}>
           {tab === 'overview' ? (
             <div className="overview">
               <div className="grid">
                 <div className="stat ok">
                   <div className="head"><Icon name="check" size={15} />今日成功</div>
-                  <div className="num ok">{stats.okToday}</div>
+                  <AnimatedNumber value={stats.okToday} className="num ok" />
                   <div className="sub">失败 {stats.failToday} 人</div>
                 </div>
                 <div className="stat">
                   <div className="head"><Icon name="overview" size={15} />今日成功率</div>
-                  <div className="num">{stats.rate}%</div>
+                  <AnimatedNumber value={stats.rate} className="num" suffix="%" />
                   <div className="progress" style={{ marginTop: 8 }}><i style={{ width: stats.rate + '%' }} /></div>
                 </div>
                 <div className="stat">
                   <div className="head"><Icon name="users" size={15} />已勾选好友</div>
-                  <div className="num">{stats.selected}</div>
+                  <AnimatedNumber value={stats.selected} className="num" />
                   <div className="sub">好友总数 {friends.filter((f) => !f.isGroup).length}</div>
                 </div>
                 <div className="stat flame">
                   <div className="head"><Icon name="flame" size={15} />有火花的好友</div>
-                  <div className="num flame">{stats.streakCount}</div>
+                  <AnimatedNumber value={stats.streakCount} className="num flame" />
                   <div className="sub">按火花天数自动识别</div>
                 </div>
                 <div className="stat">
@@ -381,16 +476,18 @@ export default function App(): JSX.Element {
                   <input placeholder="搜索好友备注名…" value={keyword} onChange={(e) => setKeyword(e.target.value)} style={{ paddingLeft: 34 }} />
                   <span style={{ position: 'absolute', left: 11, top: 9, color: 'var(--text-faint)' }}><Icon name="search" size={15} /></span>
                 </div>
-                <button onClick={() => call('refreshFriends', undefined, '好友列表已刷新')} disabled={busy === 'refreshFriends'}>
-                  {busy === 'refreshFriends' ? <span className="row" style={{ gap: 6 }}><span className="spin" />读取中</span> : <span className="row" style={{ gap: 6 }}><Icon name="refresh" size={14} />刷新好友列表</span>}
+                <button onClick={() => refreshFriends(false)} disabled={refreshing}>
+                  {refreshing ? <span className="row" style={{ gap: 6 }}><span className="spin" />读取中</span> : <span className="row" style={{ gap: 6 }}><Icon name="refresh" size={14} />刷新好友列表</span>}
                 </button>
                 <div className="spacer" />
                 <button className="sm" onClick={() => call('selectAll', { selected: true, onlyWithStreak: true }, '已选中所有有火花的好友')}>选中有火的</button>
                 <button className="sm" onClick={() => call('selectAll', { selected: true, onlyWithStreak: false }, '已全选')}>全选</button>
                 <button className="sm" onClick={() => call('selectAll', { selected: false, onlyWithStreak: false }, '已全部取消')}>全不选</button>
               </div>
+              {refreshing ? <div className="progress thin"><i className="indet" /></div> : null}
               <div className="hint">
                 勾选要自动续火花的好友。带 🔥 的数字是当前连续天数；标了「群聊」的只是提示，悬停可看判定依据，「选中有火的」会自动跳过它们。
+                <span className="auto-tag">进入本页会自动刷新一次</span>
               </div>
               <div className="table-wrap">
                 <div className="table-scroll">
@@ -501,10 +598,10 @@ export default function App(): JSX.Element {
             <div className="form">
               <div className="panel">
                 <h3 className="section-title"><Icon name="clock" size={15} />定时与节奏</h3>
-                <label className="check">
-                  <input type="checkbox" checked={draft.enabled} onChange={(e) => patchDraft({ enabled: e.target.checked })} />
+                <div className="check">
+                  <Switch checked={draft.enabled} onChange={(v) => patchDraft({ enabled: v })} />
                   <span>开启定时任务（到点自动续火花）</span>
-                </label>
+                </div>
                 <div className="row" style={{ marginTop: 16 }}>
                   <div className="field" style={{ flex: 1, minWidth: 260 }}>
                     <label>执行时间（24 小时制，逗号分隔）</label>
@@ -529,18 +626,18 @@ export default function App(): JSX.Element {
                     <input type="number" value={draft.maxPerRun} onChange={(e) => patchDraft({ maxPerRun: Number(e.target.value) })} />
                   </div>
                 </div>
-                <label className="check" style={{ marginTop: 14 }}>
-                  <input type="checkbox" checked={draft.headless} onChange={(e) => patchDraft({ headless: e.target.checked })} />
+                <div className="check" style={{ marginTop: 16 }}>
+                  <Switch checked={draft.headless} onChange={(v) => patchDraft({ headless: v })} />
                   <span>无头模式（后台静默运行，不弹出浏览器窗口）</span>
-                </label>
+                </div>
               </div>
 
               <div className="panel">
                 <h3 className="section-title"><Icon name="retry" size={15} />失败补发</h3>
-                <label className="check">
-                  <input type="checkbox" checked={draft.retryEnabled} onChange={(e) => patchDraft({ retryEnabled: e.target.checked })} />
+                <div className="check">
+                  <Switch checked={draft.retryEnabled} onChange={(v) => patchDraft({ retryEnabled: v })} />
                   <span>本轮有失败时，自动补发一次</span>
-                </label>
+                </div>
                 <div className="field" style={{ width: 200, marginTop: 14 }}>
                   <label>补发延迟（分钟）</label>
                   <input type="number" value={draft.retryDelayMin} onChange={(e) => patchDraft({ retryDelayMin: Number(e.target.value) })} />
@@ -567,10 +664,10 @@ export default function App(): JSX.Element {
 
               <div className="panel">
                 <h3 className="section-title"><Icon name="server" size={15} />AI 自动生成消息</h3>
-                <label className="check">
-                  <input type="checkbox" checked={draft.ai.enabled} onChange={(e) => patchAi({ enabled: e.target.checked })} />
+                <div className="check">
+                  <Switch checked={draft.ai.enabled} onChange={(v) => patchAi({ enabled: v })} />
                   <span>用大模型为每个好友生成不重复的问候语</span>
-                </label>
+                </div>
                 <div className="hint" style={{ margin: '10px 0 14px' }}>
                   需要你自己的 API Key，程序不内置。任何 OpenAI 兼容接口都可以用；未配置或调用失败时会自动回退到本地文案库。
                 </div>
@@ -619,6 +716,7 @@ export default function App(): JSX.Element {
               </div>
             </div>
           ) : null}
+          </div>
         </main>
       </div>
 
