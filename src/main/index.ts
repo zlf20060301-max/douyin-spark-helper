@@ -20,6 +20,23 @@ function sleep(ms: number): Promise<void> {
   return new Promise((r) => setTimeout(r, ms))
 }
 
+/** 单个好友处理的总超时，防止某一步卡死拖垮整轮。 */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label + ' 超时（' + Math.round(ms / 1000) + ' 秒）')), ms)
+    p.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      }
+    )
+  })
+}
+
 function status(): RuntimeStatus {
   return {
     session: engine.isOpen ? 'ready' : 'idle',
@@ -87,9 +104,18 @@ async function runAll(reason: string, opts: { dryRun?: boolean } = {}): Promise<
     }
     store.setLogin({ status: 'logged_in', nickname: prep.login.nickname, message: 'ok', checkedAt: new Date().toISOString() })
 
+    let idx = 0
     for (const friend of targets) {
+      idx++
+      logbus.info('[' + idx + '/' + targets.length + '] 处理好友：' + friend.name)
       const message = await generateMessage(settings, friend.name)
-      const res = await engine.sendTo(friend.name, message, dryRun)
+      let res: { ok: boolean; error: string | null }
+      try {
+        res = await withTimeout(engine.sendTo(friend.name, message, dryRun), 240000, '处理「' + friend.name + '」')
+      } catch (e) {
+        res = { ok: false, error: String(e).slice(0, 160) }
+        logbus.error('处理「' + friend.name + '」超时或异常，跳过继续：' + String(e).slice(0, 120))
+      }
       const at = new Date().toISOString()
       const rec: SendRecord = { at, name: friend.name, ok: res.ok, message, error: res.error }
       store.addHistory(rec)

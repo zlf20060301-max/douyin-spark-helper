@@ -1,4 +1,5 @@
 import { detectGroup, parseStreakDays } from '../src/main/automation/detect.ts'
+import { readFileSync } from 'node:fs'
 
 let pass = 0
 let fail = 0
@@ -28,6 +29,15 @@ check('parseStreakDays(845)', parseStreakDays('845'), 845)
 check('parseStreakDays(1 天后消失)', parseStreakDays('1 天后消失'), 1)
 check('parseStreakDays(null)', parseStreakDays(null), null)
 check('parseStreakDays(空串)', parseStreakDays(''), null)
+
+console.log('--- 静态回归：禁止 evaluate(JS_X, arg) 反模式 ---')
+// 实测：page.evaluate('((x) => {...})', arg) 不会调用函数，返回 undefined 且不报错。
+// 带参数的脚本必须走 evalWithArg() 拼成自执行表达式。
+const src = readFileSync(new URL('../src/main/automation/douyin.ts', import.meta.url), 'utf8')
+const badCalls = [...src.matchAll(/page\.evaluate\(\s*JS_[A-Z_]+\s*,/g)]
+check('douyin.ts 中无 evaluate(JS_X, arg) 调用', badCalls.length, 0)
+check('douyin.ts 使用 evalWithArg', src.includes('evalWithArg('), true)
+check('detect.ts 无 DOM 依赖（可在纯 Node 下测试）', readFileSync(new URL('../src/main/automation/detect.ts', import.meta.url), 'utf8').includes('document.'), false)
 
 console.log('')
 console.log(pass + ' passed, ' + fail + ' failed')

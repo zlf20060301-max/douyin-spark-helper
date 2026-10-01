@@ -32,10 +32,46 @@ function rand(a: number, b: number): number {
   return a + Math.random() * (b - a)
 }
 
+/**
+ * 给任意异步调用套一个硬超时。
+ *
+ * Playwright 的 page.evaluate / page.mouse 这类调用**没有默认超时**，
+ * 一旦页面进入异常状态就会永远不返回，表现为界面一直停在「正在执行…」。
+ * 所有浏览器交互都必须经过这里。
+ */
+function withTimeout<T>(p: Promise<T>, ms: number, label: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const t = setTimeout(() => reject(new Error(label + ' 超时（' + ms + 'ms）')), ms)
+    p.then(
+      (v) => {
+        clearTimeout(t)
+        resolve(v)
+      },
+      (e) => {
+        clearTimeout(t)
+        reject(e)
+      }
+    )
+  })
+}
+
+/**
+ * 把「带参数的箭头函数源码」拼成自执行表达式。
+ *
+ * 实测（本轮排查）：page.evaluate('((x) => {...})', arg) 只会返回 undefined，
+ * 函数根本不会被调用 —— 属于静默失效，不报错。必须写成 ((x) => {...})(arg)。
+ *
+ * 无参数脚本（(() => {...})()）本来就是自执行的，不受影响。
+ */
+function evalWithArg(fnSource: string, arg: unknown): string {
+  return '(' + fnSource + ')(' + JSON.stringify(arg) + ')'
+}
+
 export class DouyinEngine {
   private ctx: BrowserContext | null = null
   private page: Page | null = null
   private launching: Promise<unknown> | null = null
+  private headless = true
   readonly profileDir: string
   readonly screenshotDir: string
 
@@ -58,6 +94,7 @@ export class DouyinEngine {
       if (this.ctx && this.page && !this.page.isClosed()) return this.page
     }
     this.launching = (async () => {
+      this.headless = headless
       const opts: Record<string, unknown> = {
         headless,
         viewport: { width: 1366, height: 860 },
@@ -139,7 +176,7 @@ export class DouyinEngine {
   async checkLogin(page: Page): Promise<LoginCheck> {
     let dom: Record<string, unknown> = {}
     try {
-      dom = (await page.evaluate(JS_LOGIN_DOM)) as Record<string, unknown>
+      dom = (await withTimeout(page.evaluate(JS_LOGIN_DOM), 15000, '读取登录状态')) as Record<string, unknown>
     } catch (e) {
       void e
     }
@@ -172,7 +209,7 @@ export class DouyinEngine {
 
   async screenText(page: Page): Promise<string> {
     try {
-      return (await page.evaluate(JS_SCREEN_TEXT)) as string
+      return (await withTimeout(page.evaluate(JS_SCREEN_TEXT), 15000, '读取页面文本')) as string
     } catch (e) {
       return ''
     }
@@ -206,7 +243,7 @@ export class DouyinEngine {
     while (Date.now() - t0 < timeoutMs) {
       let dom: Record<string, unknown> = {}
       try {
-        dom = (await page.evaluate(JS_LIST_READY)) as Record<string, unknown>
+        dom = (await withTimeout(page.evaluate(JS_LIST_READY), 15000, '检查列表就绪')) as Record<string, unknown>
       } catch (e) {
         void e
       }
@@ -223,7 +260,7 @@ export class DouyinEngine {
 
   private async scrollTop(page: Page): Promise<void> {
     try {
-      await page.evaluate(JS_SCROLL_TO, 0)
+      await withTimeout(page.evaluate(evalWithArg(JS_SCROLL_TO, 0)), 10000, '列表回顶')
       await page.waitForTimeout(400)
     } catch (e) {
       void e
@@ -241,7 +278,7 @@ export class DouyinEngine {
     for (let step = 0; step < 150; step++) {
       let items: Array<Record<string, unknown>> = []
       try {
-        items = (await page.evaluate(JS_COLLECT)) as Array<Record<string, unknown>>
+        items = (await withTimeout(page.evaluate(JS_COLLECT), 15000, '采集会话列表')) as Array<Record<string, unknown>>
       } catch (e) {
         void e
       }
@@ -275,7 +312,7 @@ export class DouyinEngine {
 
       let probe: Record<string, unknown> = {}
       try {
-        probe = (await page.evaluate(JS_SCROLL_PROBE)) as Record<string, unknown>
+        probe = (await withTimeout(page.evaluate(JS_SCROLL_PROBE), 10000, '读取滚动状态')) as Record<string, unknown>
       } catch (e) {
         void e
       }
@@ -288,7 +325,7 @@ export class DouyinEngine {
       if (stable >= 4) break
       const nextTop = Number(probe.scrollTop) + Math.floor(Number(probe.clientHeight) * 0.85)
       try {
-        await page.evaluate(JS_SCROLL_TO, nextTop)
+        await withTimeout(page.evaluate(evalWithArg(JS_SCROLL_TO, nextTop)), 10000, '滚动列表')
       } catch (e) {
         void e
       }
@@ -310,27 +347,31 @@ export class DouyinEngine {
 
   private async locateAndClick(page: Page, name: string): Promise<number | null> {
     await this.scrollTop(page)
-    for (let step = 0; step < 200; step++) {
+    for (let step = 0; step < 60; step++) {
       let hit: { x: number; y: number } | null = null
       try {
-        hit = (await page.evaluate(JS_CLICK_BY_NAME, name)) as { x: number; y: number } | null
+        hit = (await withTimeout(page.evaluate(evalWithArg(JS_CLICK_BY_NAME, name)), 10000, '查找会话')) as { x: number; y: number } | null
       } catch (e) {
-        void e
+        logbus.warn('查找会话「' + name + '」失败：' + String(e).slice(0, 100))
       }
       if (hit) {
-        await page.mouse.click(hit.x, hit.y)
+        try {
+          await withTimeout(page.mouse.click(hit.x, hit.y), 10000, '点击会话')
+        } catch (e) {
+          logbus.warn('点击会话「' + name + '」失败：' + String(e).slice(0, 100))
+        }
         return step
       }
       let probe: Record<string, unknown> = {}
       try {
-        probe = (await page.evaluate(JS_SCROLL_PROBE)) as Record<string, unknown>
+        probe = (await withTimeout(page.evaluate(JS_SCROLL_PROBE), 10000, '读取滚动状态')) as Record<string, unknown>
       } catch (e) {
         void e
       }
       if (!probe.found || probe.atBottom) return null
       const nextTop = Number(probe.scrollTop) + Math.floor(Number(probe.clientHeight) * 0.8)
       try {
-        await page.evaluate(JS_SCROLL_TO, nextTop)
+        await withTimeout(page.evaluate(evalWithArg(JS_SCROLL_TO, nextTop)), 10000, '滚动列表')
       } catch (e) {
         void e
       }
@@ -341,9 +382,10 @@ export class DouyinEngine {
 
   private async verifyInConversation(page: Page, name: string): Promise<boolean> {
     try {
-      const cur = (await page.evaluate(JS_CURRENT_CONV)) as { title: string | null } | null
+      const cur = (await withTimeout(page.evaluate(JS_CURRENT_CONV), 10000, '读取当前会话')) as { title: string | null } | null
       if (!cur || !cur.title) return false
-      const norm = (s: string): string => s.split(String.fromCharCode(160)).join(' ').replace(/s+/g, ' ').trim()
+      const norm = (s: string): string =>
+        s.split(String.fromCharCode(160)).join(' ').replace(/[\s\u3000]+/g, ' ').trim()
       return norm(cur.title) === norm(name)
     } catch (e) {
       return false
@@ -352,7 +394,7 @@ export class DouyinEngine {
 
   private async clearEditor(page: Page): Promise<void> {
     try {
-      await page.evaluate(JS_EDITOR_CLEAR)
+      await withTimeout(page.evaluate(JS_EDITOR_CLEAR), 10000, '清空输入框')
     } catch (e) {
       void e
     }
@@ -360,7 +402,7 @@ export class DouyinEngine {
 
   private async editorEmpty(page: Page): Promise<boolean | null> {
     try {
-      return (await page.evaluate(JS_EDITOR_EMPTY)) as boolean | null
+      return (await withTimeout(page.evaluate(JS_EDITOR_EMPTY), 10000, '检查输入框')) as boolean | null
     } catch (e) {
       return null
     }
@@ -370,7 +412,8 @@ export class DouyinEngine {
     for (const sel of EDITOR_CANDIDATES) {
       try {
         const loc = page.locator(sel).first()
-        if ((await loc.count()) > 0 && (await loc.isVisible())) return true
+        const n = await withTimeout(loc.count(), 8000, '查找输入框')
+        if (n > 0 && (await withTimeout(loc.isVisible(), 8000, '判断输入框可见'))) return true
       } catch (e) {
         continue
       }
@@ -414,10 +457,14 @@ export class DouyinEngine {
   async sendTo(name: string, message: string, dryRun: boolean): Promise<SendResult> {
     const page = this.page
     if (!page) return { ok: false, error: '浏览器未启动' }
-    try {
-      await page.bringToFront()
-    } catch (e) {
-      void e
+
+    // 无头模式没有"前台窗口"的概念，bringToFront 在无头下可能永不返回。
+    if (!this.headless) {
+      try {
+        await withTimeout(page.bringToFront(), 5000, '激活浏览器窗口')
+      } catch (e) {
+        void e
+      }
     }
 
     const limited = await this.detectRateLimit(page)
@@ -426,24 +473,32 @@ export class DouyinEngine {
       return { ok: false, error: '检测到风控提示「' + limited + '」，本轮停止' }
     }
 
+    logbus.info('→ 正在切换会话：' + name)
     let switched = false
     for (let attempt = 0; attempt < 3 && !switched; attempt++) {
       await this.locateAndClick(page, name)
       await page.waitForTimeout(Math.floor(rand(1600, 3200)))
       switched = await this.verifyInConversation(page, name)
-      if (!switched) await page.waitForTimeout(900)
+      if (!switched) {
+        logbus.warn('第 ' + (attempt + 1) + ' 次未能确认进入「' + name + '」的会话，重试')
+        await page.waitForTimeout(900)
+      }
     }
     if (!switched) {
       await this.screenshot(page, 'switch-failed')
       return { ok: false, error: '未能切换到该好友会话（可能已不在列表或页面结构变化）' }
     }
+    logbus.info('→ 已进入会话：' + name)
 
     if (!(await this.findEditor(page))) {
       await this.screenshot(page, 'no-editor')
       return { ok: false, error: '找不到聊天输入框' }
     }
 
-    if (dryRun) return { ok: true, error: null }
+    if (dryRun) {
+      logbus.info('→ 试运行：已确认可进入会话且输入框存在（未发送）')
+      return { ok: true, error: null }
+    }
 
     const limited2 = await this.detectRateLimit(page)
     if (limited2) {
