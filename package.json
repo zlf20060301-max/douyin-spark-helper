@@ -1,0 +1,78 @@
+{
+  "name": "douyin-spark-helper",
+  "version": "0.1.0",
+  "description": "抖音续火花桌面助手 — 本地浏览器自动化，保持好友聊天火花不熄灭",
+  "main": "./out/main/index.js",
+  "author": "A29DJX",
+  "license": "MIT",
+  "scripts": {
+    "dev": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/dev.ps1",
+    "build": "electron-vite build",
+    "start": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start.ps1",
+    "typecheck": "tsc --noEmit -p tsconfig.node.json && tsc --noEmit -p tsconfig.web.json",
+    "pack": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/pack.ps1",
+    "dist": "electron-vite build && electron-builder --win"
+  },
+  "dependencies": {
+    "playwright-core": "^1.49.1"
+  },
+  "devDependencies": {
+    "@types/node": "^22.10.2",
+    "@types/react": "^18.3.17",
+    "@types/react-dom": "^18.3.5",
+    "@vitejs/plugin-react": "^4.3.4",
+    "electron": "^33.2.1",
+    "electron-builder": "^25.1.8",
+    "electron-vite": "^2.3.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1",
+    "typescript": "^5.7.2",
+    "vite": "^5.4.11"
+  },
+  "build": {
+    "appId": "com.a29djx.douyin-spark",
+    "productName": "抖音续火花助手",
+    "directories": {
+      "output": "release"
+    },
+    "files": [
+      "out/**/*",
+      "package.json"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "signAndEditExecutable": false
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "createDesktopShortcut": true,
+      "shortcutName": "抖音续火花助手"
+    }
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/zlf20060301-max/douyin-spark-helper.git"
+  },
+  "homepage": "https://github.com/zlf20060301-max/douyin-spark-helper#readme",
+  "bugs": {
+    "url": "https://github.com/zlf20060301-max/douyin-spark-helper/issues"
+  },
+  "keywords": [
+    "douyin",
+    "抖音",
+    "续火花",
+    "spark",
+    "electron",
+    "playwright",
+    "automation"
+  ]
+}
