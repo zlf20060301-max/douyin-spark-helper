@@ -185,7 +185,7 @@ export default function App(): JSX.Element {
   const testAi = async (): Promise<void> => {
     setBusy('ai')
     try {
-      const r = (await api.testAi()) as { text: string }
+      const r = (await api.testAi(draft.ai)) as { text: string }
       flash('AI 生成示例：' + r.text)
     } catch (e) {
       flash('AI 测试失败：' + String(e).slice(0, 200))

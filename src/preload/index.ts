@@ -11,7 +11,7 @@ const api = {
   logout: () => ipcRenderer.invoke('login:logout'),
   runNow: (payload: unknown) => ipcRenderer.invoke('run:now', payload),
   clearHistory: () => ipcRenderer.invoke('history:clear'),
-  testAi: () => ipcRenderer.invoke('ai:test'),
+  testAi: (payload?: unknown) => ipcRenderer.invoke('ai:test', payload),
   openDataDir: () => ipcRenderer.invoke('shell:dataDir'),
   clearLogs: () => ipcRenderer.invoke('logs:clear'),
   onUpdate: (cb: (state: unknown) => void) => {

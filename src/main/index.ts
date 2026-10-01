@@ -6,7 +6,7 @@ import { logbus } from './logbus'
 import { engine } from './automation/douyin'
 import { generateMessage, callAi } from './ai'
 import { Scheduler } from './scheduler'
-import type { Friend, LoginState, RuntimeStatus, SendRecord, Settings } from '../shared/types'
+import type { AiSettings, Friend, LoginState, RuntimeStatus, SendRecord, Settings } from '../shared/types'
 
 let win: BrowserWindow | null = null
 let store: Store
@@ -282,9 +282,22 @@ function registerIpc(): void {
     return snapshot()
   })
 
-  ipcMain.handle('ai:test', async () => {
-    const text = await callAi(store.settings, '测试好友')
-    return { ok: true, text }
+  ipcMain.handle('ai:test', async (_e, aiPatch?: Partial<AiSettings>) => {
+    // 关键：用界面上「当前填的内容」测试，而不是已保存的旧配置。
+    // 否则用户填了 Key 直接点测试，会拿空的旧配置去请求，必然报错。
+    const settings: Settings = {
+      ...store.settings,
+      ai: { ...store.settings.ai, ...(aiPatch || {}) }
+    }
+    try {
+      const text = await callAi(settings, '测试好友')
+      logbus.info('AI 测试成功：' + text)
+      return { ok: true, text }
+    } catch (e) {
+      const msg = String(e).replace(/^Error:\s*/, '')
+      logbus.warn('AI 测试失败：' + msg)
+      throw new Error(msg)
+    }
   })
 
   ipcMain.handle('shell:dataDir', () => {
